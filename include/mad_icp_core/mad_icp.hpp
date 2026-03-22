@@ -35,8 +35,6 @@
 #include <Eigen/Core>
 #include <Eigen/Geometry>
 
-#include <omp.h>
-
 #include <vector>
 
 namespace mad_icp_core

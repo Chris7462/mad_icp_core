@@ -10,6 +10,7 @@ endif()
 find_package(ament_cmake REQUIRED)
 find_package(Eigen3 REQUIRED)
 find_package(OpenMP REQUIRED)
+find_package(PCL REQUIRED COMPONENTS common)
 
 # Define the static library target
 add_library(mad_icp_core STATIC
@@ -23,13 +24,14 @@ target_include_directories(mad_icp_core
   PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>
-  PRIVATE
-    ${EIGEN3_INCLUDE_DIR}
+    ${PCL_INCLUDE_DIRS}
 )
 
 target_link_libraries(mad_icp_core
   PUBLIC
     Eigen3::Eigen
+    ${PCL_LIBRARIES}
+  PRIVATE
     OpenMP::OpenMP_CXX
 )
 
@@ -61,7 +63,7 @@ install(DIRECTORY include/
 
 # Export targets and dependencies
 ament_export_targets(export_${PROJECT_NAME} HAS_LIBRARY_TARGET)
-ament_export_dependencies(Eigen3 OpenMP)
+ament_export_dependencies(Eigen3 PCL)
 ament_export_include_directories(include)
 
 if(BUILD_TESTING)

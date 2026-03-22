@@ -30,31 +30,30 @@
 
 #include "mad_icp_core/utils.hpp"
 
+#include <pcl/point_types.h>
+
 #include <Eigen/Core>
 
-#include <atomic>
-#include <iostream>
-#include <list>
-#include <memory>
 #include <vector>
 
 namespace mad_icp_core
 {
 
-// type aliases
-using ContainerType    = std::vector<Eigen::Vector3d>;
-using ContainerTypePtr = ContainerType *;
-using IteratorType     = typename ContainerType::iterator;
 
+// forward declaration needed for LeafList
 class MADtree;
+
+// type aliases — Eigen::aligned_allocator matches pcl::PointCloud<pcl::PointXYZI>::points
+using ContainerType = std::vector<pcl::PointXYZI, Eigen::aligned_allocator<pcl::PointXYZI>>;
 using LeafList = std::vector<MADtree *>;
 
-struct MADtree
+class MADtree
 {
+public:
   MADtree(
-    const ContainerTypePtr vec,
-    const IteratorType begin,
-    const IteratorType end,
+    ContainerType * const vec,
+    const ContainerType::iterator begin,
+    const ContainerType::iterator end,
     const double b_max,
     const double b_min,
     const int level,
@@ -62,35 +61,18 @@ struct MADtree
     MADtree * parent,
     MADtree * plane_predecessor);
 
-  inline ~MADtree()
-  {
-    if (left_) {
-      delete left_;
-    }
-    if (right_) {
-      delete right_;
-    }
-  }
+  MADtree() = delete;
+
+  ~MADtree();
 
   void applyTransform(const Eigen::Matrix3d & r, const Eigen::Vector3d & t);
 
   const MADtree * bestMatchingLeafFast(const Eigen::Vector3d & query) const;
 
-  void build(
-    const ContainerTypePtr vec,
-    const IteratorType begin,
-    const IteratorType end,
-    const double b_max,
-    const double b_min,
-    const int level,
-    const int max_parallel_level,
-    MADtree * parent,
-    MADtree * plane_predecessor);
-
   static MADtree * makeSubtree(
-    const ContainerTypePtr vec,
-    const IteratorType begin,
-    const IteratorType end,
+    ContainerType * const vec,
+    const ContainerType::iterator begin,
+    const ContainerType::iterator end,
     const double b_max,
     const double b_min,
     const int level,
@@ -102,15 +84,13 @@ struct MADtree
 
   int num_points_;
   bool matched_;
-  MADtree * left_   = nullptr;
-  MADtree * right_  = nullptr;
+  MADtree * left_ = nullptr;
+  MADtree * right_ = nullptr;
   MADtree * parent_ = nullptr;
   Eigen::Vector3d mean_;
   Eigen::Vector3d bbox_;
   Eigen::Matrix3d eigenvectors_;
-
-protected:
-  MADtree() {}
+  float mean_intensity_;
 };
 
 }  // namespace mad_icp_core

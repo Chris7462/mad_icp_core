@@ -31,28 +31,15 @@
 #include <Eigen/Eigenvalues>
 
 #include <future>
+#include <limits>
 
 namespace mad_icp_core
 {
 
 MADtree::MADtree(
-  const ContainerTypePtr vec,
-  const IteratorType begin,
-  const IteratorType end,
-  const double b_max,
-  const double b_min,
-  const int level,
-  const int max_parallel_level,
-  MADtree * parent,
-  MADtree * plane_predecessor)
-{
-  build(vec, begin, end, b_max, b_min, level, max_parallel_level, parent, plane_predecessor);
-}
-
-void MADtree::build(
-  const ContainerTypePtr vec,
-  const IteratorType begin,
-  const IteratorType end,
+  ContainerType * const vec,
+  const ContainerType::iterator begin,
+  const ContainerType::iterator end,
   const double b_max,
   const double b_min,
   const int level,
@@ -61,6 +48,8 @@ void MADtree::build(
   MADtree * plane_predecessor)
 {
   parent_ = parent;
+  mean_intensity_ = 0.0f;
+
   Eigen::Matrix3d cov;
   computeMeanAndCovariance(mean_, cov, begin, end);
   Eigen::SelfAdjointEigenSolver<Eigen::Matrix3d> es;
@@ -81,17 +70,19 @@ void MADtree::build(
       }
     }
 
-    Eigen::Vector3d & nearest_point = *begin;
-    double shortest_dist            = std::numeric_limits<double>::max();
-    for (IteratorType it = begin; it != end; ++it) {
-      const Eigen::Vector3d & v = *it;
-      const double dist         = (v - mean_).norm();
+    // find nearest point to mean and use it as the leaf representative
+    ContainerType::iterator nearest_it = begin;
+    double shortest_dist = std::numeric_limits<double>::max();
+    for (ContainerType::iterator it = begin; it != end; ++it) {
+      const Eigen::Vector3d v = it->getVector3fMap().template cast<double>();
+      const double dist = (v - mean_).norm();
       if (dist < shortest_dist) {
-        nearest_point = v;
+        nearest_it = it;
         shortest_dist = dist;
       }
     }
-    mean_ = nearest_point;
+    mean_ = nearest_it->getVector3fMap().template cast<double>();
+    mean_intensity_ = nearest_it->intensity;  // use nearest point's actual reflectivity
     return;
   }
 
@@ -102,16 +93,16 @@ void MADtree::build(
   }
 
   const Eigen::Vector3d & split_plane_normal = eigenvectors_.col(2);
-  IteratorType middle                        = split(
-    begin, end, [&](const Eigen::Vector3d & p) -> bool {
-      return (p - mean_).dot(split_plane_normal) < double(0);
+  ContainerType::iterator middle = split(
+    begin, end, [&](const pcl::PointXYZI & p) -> bool {
+      return (p.getVector3fMap().template cast<double>() - mean_).dot(split_plane_normal) < double(0);
     });
 
   if (level >= max_parallel_level) {
-    left_  = new MADtree(vec, begin, middle, b_max, b_min, level + 1, max_parallel_level, this,
-        plane_predecessor);
-    right_ = new MADtree(vec, middle, end, b_max, b_min, level + 1, max_parallel_level, this,
-        plane_predecessor);
+    left_  = new MADtree(
+      vec, begin, middle, b_max, b_min, level + 1, max_parallel_level, this, plane_predecessor);
+    right_ = new MADtree(
+      vec, middle, end, b_max, b_min, level + 1, max_parallel_level, this, plane_predecessor);
   } else {
     std::future<MADtree *> l = std::async(
       MADtree::makeSubtree, vec, begin, middle, b_max, b_min, level + 1, max_parallel_level, this,
@@ -124,10 +115,20 @@ void MADtree::build(
   }
 }
 
+MADtree::~MADtree()
+{
+  if (left_) {
+    delete left_;
+  }
+  if (right_) {
+    delete right_;
+  }
+}
+
 MADtree * MADtree::makeSubtree(
-  const ContainerTypePtr vec,
-  const IteratorType begin,
-  const IteratorType end,
+  ContainerType * const vec,
+  const ContainerType::iterator begin,
+  const ContainerType::iterator end,
   const double b_max,
   const double b_min,
   const int level,
@@ -144,7 +145,8 @@ const MADtree * MADtree::bestMatchingLeafFast(const Eigen::Vector3d & query) con
   const MADtree * node = this;
   while (node->left_ || node->right_) {
     const Eigen::Vector3d & split_plane_normal = node->eigenvectors_.col(2);
-    node = ((query - node->mean_).dot(split_plane_normal) < double(0)) ? node->left_ : node->right_;
+    node = ((query - node->mean_).dot(split_plane_normal) < double(0)) ?
+      node->left_ : node->right_;
   }
   return node;
 }
@@ -165,7 +167,7 @@ void MADtree::getLeafs(std::back_insert_iterator<std::vector<MADtree *>> it)
 
 void MADtree::applyTransform(const Eigen::Matrix3d & r, const Eigen::Vector3d & t)
 {
-  mean_         = r * mean_ + t;
+  mean_ = r * mean_ + t;
   eigenvectors_ = r * eigenvectors_;
   if (left_) {
     left_->applyTransform(r, t);

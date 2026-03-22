@@ -74,9 +74,9 @@ public:
   void compute(const double & curr_stamp, ContainerType curr_cloud_mem);
 
 protected:
-  void initialize(const double & curr_stamp, const ContainerTypePtr curr_cloud);
+  void initialize(const double & curr_stamp, ContainerType * const curr_cloud);
   void deskew(
-    const ContainerTypePtr & curr_cloud,
+    ContainerType * const curr_cloud,
     const Eigen::Isometry3d & T_prev,
     const Eigen::Isometry3d & T_now);
 

@@ -41,10 +41,10 @@ struct Frame
   Frame()
   {
     frame_to_map_.setIdentity();
-    tree_   = nullptr;
-    stamp_  = 0.0;
+    tree_ = nullptr;
+    stamp_ = 0.0;
     weight_ = 0.0;
-    frame_  = 0;
+    frame_ = 0;
   }
 
   Eigen::Isometry3d frame_to_map_;

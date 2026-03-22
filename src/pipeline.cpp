@@ -29,6 +29,8 @@
 #include "mad_icp_core/pipeline.hpp"
 #include "mad_icp_core/constants.hpp"
 
+#include <omp.h>
+
 namespace mad_icp_core
 {
 
@@ -78,7 +80,7 @@ Pipeline::~Pipeline()
 }
 
 void Pipeline::deskew(
-  const ContainerTypePtr & curr_cloud,
+  ContainerType * const curr_cloud,
   const Eigen::Isometry3d & T_prev,
   const Eigen::Isometry3d & T_now)
 {
@@ -90,13 +92,13 @@ void Pipeline::deskew(
   naive_vel.tail(3)               = logMapSO3(T_now_to_prev.linear());
   naive_vel                       = naive_vel / ts;
 
-  using AzimuthPair = std::pair<double, Eigen::Vector3d>;
+  using AzimuthPair = std::pair<double, pcl::PointXYZI>;
   std::vector<AzimuthPair> sorted(curr_cloud->size());
 
   for (size_t i = 0; i < sorted.size(); ++i) {
-    const Eigen::Vector3d & point = curr_cloud->at(i);
-    const double azimuth          = atan2(point.y(), point.x());
-    sorted[i]                     = std::make_pair(azimuth, point);
+    const pcl::PointXYZI & point = curr_cloud->at(i);
+    const double azimuth = atan2(point.y, point.x);
+    sorted[i] = std::make_pair(azimuth, point);
   }
 
   std::sort(
@@ -126,7 +128,11 @@ void Pipeline::deskew(
       meas_pose_to_robot.translation() = delta_s.head(3);
     }
 
-    (*curr_cloud)[i] = meas_pose_to_robot * sorted[i].second;
+    // transform XYZ, preserve intensity
+    const Eigen::Vector3d corrected =
+      meas_pose_to_robot * sorted[i].second.getVector3fMap().cast<double>();
+    (*curr_cloud)[i] = sorted[i].second;  // preserves intensity
+    (*curr_cloud)[i].getVector3fMap() = corrected.cast<float>();
   }
 }
 
@@ -155,8 +161,8 @@ void Pipeline::compute(const double & curr_stamp, ContainerType curr_cloud_mem)
   Eigen::Isometry3d dX;
   const Eigen::Matrix3d dR = expMapSO3(dx.tail(3));
   dX.setIdentity();
-  dX.linear()                  = dR;
-  dX.translation()             = dx.head(3);
+  dX.linear() = dR;
+  dX.translation() = dx.head(3);
   Eigen::Isometry3d prediction = frame_to_map_ * dX;
 
   icp_.setMoving(current_leaves_);
@@ -207,12 +213,12 @@ void Pipeline::compute(const double & curr_stamp, ContainerType curr_cloud_mem)
   current_velocity_ = vel_estimator_.X_;
 
   Frame * current_frame(new Frame);
-  current_frame->frame_        = seq_;
+  current_frame->frame_ = seq_;
   current_frame->frame_to_map_ = frame_to_map_;
-  current_frame->stamp_        = curr_stamp;
-  current_frame->weight_       = icp_.H_adder_.inverse().determinant();
+  current_frame->stamp_ = curr_stamp;
+  current_frame->weight_ = icp_.H_adder_.inverse().determinant();
   current_tree_->applyTransform(frame_to_map_.linear(), frame_to_map_.translation());
-  current_frame->tree_   = current_tree_;
+  current_frame->tree_ = current_tree_;
   current_frame->leaves_ = current_leaves_;
 
   frames_.push_back(current_frame);
@@ -223,12 +229,12 @@ void Pipeline::compute(const double & curr_stamp, ContainerType curr_cloud_mem)
 
   if (inliers_ratio < p_th_) {
     double best_weight = std::numeric_limits<double>::max();
-    int new_seq        = 0;
+    int new_seq = 0;
     Frame * best_frame = nullptr;
     for (Frame * frame : frames_) {
       if (frame->weight_ < best_weight) {
         best_weight = frame->weight_;
-        new_seq     = frame->frame_;
+        new_seq = frame->frame_;
         best_frame  = frame;
       }
     }
@@ -247,20 +253,20 @@ void Pipeline::compute(const double & curr_stamp, ContainerType curr_cloud_mem)
     }
 
     is_map_updated_  = true;
-    seq_keyframe_    = new_seq;
+    seq_keyframe_ = new_seq;
     keyframe_to_map_ = best_frame->frame_to_map_;
   }
 
   seq_++;
 }
 
-void Pipeline::initialize(const double & curr_stamp, const ContainerTypePtr curr_cloud)
+void Pipeline::initialize(const double & curr_stamp, ContainerType * const curr_cloud)
 {
   Frame * current_frame(new Frame);
-  current_frame->frame_        = seq_;
+  current_frame->frame_ = seq_;
   current_frame->frame_to_map_ = frame_to_map_;
-  current_frame->stamp_        = curr_stamp;
-  current_frame->tree_         = new MADtree(
+  current_frame->stamp_ = curr_stamp;
+  current_frame->tree_ = new MADtree(
     curr_cloud, curr_cloud->begin(), curr_cloud->end(),
     b_max_, b_min_, 0, max_parallel_levels_, nullptr, nullptr);
 
@@ -278,9 +284,11 @@ void Pipeline::initialize(const double & curr_stamp, const ContainerTypePtr curr
 const ContainerType Pipeline::currentLeaves() const
 {
   ContainerType leaves;
-  std::back_insert_iterator<ContainerType> leaves_it(leaves);
   for (MADtree * leaf : current_leaves_) {
-    ++leaves_it = leaf->mean_;
+    pcl::PointXYZI point;
+    point.getVector3fMap() = leaf->mean_.cast<float>();
+    point.intensity        = leaf->mean_intensity_;
+    leaves.push_back(point);
   }
   return leaves;
 }
@@ -288,10 +296,12 @@ const ContainerType Pipeline::currentLeaves() const
 const ContainerType Pipeline::modelLeaves() const
 {
   ContainerType leaves;
-  std::back_insert_iterator<ContainerType> leaves_it(leaves);
   for (const Frame * frame : keyframes_) {
     for (MADtree * leaf : frame->leaves_) {
-      ++leaves_it = leaf->mean_;
+      pcl::PointXYZI point;
+      point.getVector3fMap() = leaf->mean_.cast<float>();
+      point.intensity        = leaf->mean_intensity_;
+      leaves.push_back(point);
     }
   }
   return leaves;

@@ -44,8 +44,8 @@ IteratorType split(const IteratorType & begin, const IteratorType & end, const P
   IteratorType lower                        = begin;
   std::reverse_iterator<IteratorType> upper = std::make_reverse_iterator(end);
   while (lower != upper.base()) {
-    Eigen::Vector3d & v_lower = *lower;
-    Eigen::Vector3d & v_upper = *upper;
+    auto & v_lower = *lower;
+    auto & v_upper = *upper;
     if (predicate(v_lower)) {
       ++lower;
     } else {
@@ -67,13 +67,13 @@ int computeMeanAndCovariance(
   cov.setZero();
   int k = 0;
   for (IteratorType it = begin; it != end; ++it) {
-    const Eigen::Vector3d & v = *it;
+    const Eigen::Vector3d v = it->getVector3fMap().template cast<double>();
     mean += v;
     cov += v * v.transpose();
     ++k;
   }
-  mean *= (1. / k);
-  cov *= (1. / k);
+  mean *= (1.0 / k);
+  cov *= (1.0 / k);
   cov -= mean * mean.transpose();
   cov *= double(k) / double(k - 1);
   return k;
@@ -93,7 +93,7 @@ int computeBoundingBox(
   Eigen::Vector3d bbox_neg = Eigen::Vector3d::Zero();
   Eigen::Vector3d bbox_pos = Eigen::Vector3d::Zero();
   for (IteratorType it = begin; it != end; ++it) {
-    const Eigen::Vector3d v = R * (*it - center);
+    const Eigen::Vector3d v = R * (it->getVector3fMap().template cast<double>() - center);
     for (size_t i = 0; i < 3; ++i) {
       bbox_neg(i) = std::min<double>(bbox_neg(i), v(i));
       bbox_pos(i) = std::max<double>(bbox_pos(i), v(i));

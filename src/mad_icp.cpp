@@ -30,6 +30,8 @@
 
 #include <Eigen/Eigenvalues>
 
+#include <omp.h>
+
 namespace mad_icp_core
 {
 
@@ -77,7 +79,7 @@ void MADicp::errorAndJacobian(
   const auto & moving_point = moving.mean_;
   const Eigen::Matrix3d & R = X_.linear();
 
-  e                   = (moving_transformed - fixed_point).dot(fixed_normal);
+  e = (moving_transformed - fixed_point).dot(fixed_normal);
   J.block<1, 3>(0, 0) = fixed_normal.transpose() * R;
   J.block<1, 3>(0, 3) = -J.block<1, 3>(0, 0) * skew(moving_point);
 }
@@ -88,7 +90,7 @@ void MADicp::update(const MADtree * fixed_tree)
 
   for (auto & moving : moving_leaves_) {
     const Eigen::Vector3d ml = X_ * moving->mean_;
-    const auto f             = fixed_tree->bestMatchingLeafFast(ml);
+    const auto f = fixed_tree->bestMatchingLeafFast(ml);
 
     const double src_ball = min_ball_ + b_ratio_ * moving->mean_.norm();
     if ((ml - f->mean_).norm() > src_ball) {
@@ -102,7 +104,7 @@ void MADicp::update(const MADtree * fixed_tree)
 
     errorAndJacobian(e, J, *f, *moving, ml);
 
-    double scale    = 1.0;
+    double scale = 1.0;
     const double chi = abs(e);
     if (chi > rho_ker_) {
       scale = rho_ker_ / chi;
@@ -122,11 +124,11 @@ void MADicp::updateState()
     b_adder_ += b_adders_[i];
   }
 
-  Vector6d dx          = H_adder_.ldlt().solve(-b_adder_);
+  Vector6d dx = H_adder_.ldlt().solve(-b_adder_);
   Eigen::Isometry3d dX = Eigen::Isometry3d::Identity();
-  dX.linear()          = expMapSO3(dx.tail(3));
-  dX.translation()     = dx.head(3);
-  X_                   = X_ * dX;
+  dX.linear() = expMapSO3(dx.tail(3));
+  dX.translation() = dx.head(3);
+  X_ = X_ * dX;
 }
 
 }  // namespace mad_icp_core
