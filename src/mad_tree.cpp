@@ -48,7 +48,6 @@ MADtree::MADtree(
   MADtree * plane_predecessor)
 {
   parent_ = parent;
-  mean_intensity_ = 0.0f;
 
   Eigen::Matrix3d cov;
   computeMeanAndCovariance(mean_, cov, begin, end);
@@ -82,7 +81,6 @@ MADtree::MADtree(
       }
     }
     mean_ = nearest_it->getVector3fMap().template cast<double>();
-    mean_intensity_ = nearest_it->intensity;  // use nearest point's actual reflectivity
     return;
   }
 
@@ -94,7 +92,7 @@ MADtree::MADtree(
 
   const Eigen::Vector3d & split_plane_normal = eigenvectors_.col(2);
   ContainerType::iterator middle = split(
-    begin, end, [&](const pcl::PointXYZI & p) -> bool {
+    begin, end, [&](const pcl::PointXYZ & p) -> bool {
       return (p.getVector3fMap().template cast<double>() - mean_).dot(split_plane_normal) < double(0);
     });
 

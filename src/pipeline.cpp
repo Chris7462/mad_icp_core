@@ -92,11 +92,11 @@ void Pipeline::deskew(
   naive_vel.tail(3)               = logMapSO3(T_now_to_prev.linear());
   naive_vel                       = naive_vel / ts;
 
-  using AzimuthPair = std::pair<double, pcl::PointXYZI>;
+  using AzimuthPair = std::pair<double, pcl::PointXYZ>;
   std::vector<AzimuthPair> sorted(curr_cloud->size());
 
   for (size_t i = 0; i < sorted.size(); ++i) {
-    const pcl::PointXYZI & point = curr_cloud->at(i);
+    const pcl::PointXYZ & point = curr_cloud->at(i);
     const double azimuth = atan2(point.y, point.x);
     sorted[i] = std::make_pair(azimuth, point);
   }
@@ -128,10 +128,9 @@ void Pipeline::deskew(
       meas_pose_to_robot.translation() = delta_s.head(3);
     }
 
-    // transform XYZ, preserve intensity
+    // transform XYZ
     const Eigen::Vector3d corrected =
-      meas_pose_to_robot * sorted[i].second.getVector3fMap().cast<double>();
-    (*curr_cloud)[i] = sorted[i].second;  // preserves intensity
+      meas_pose_to_robot * sorted[i].second.getVector3fMap().template cast<double>();
     (*curr_cloud)[i].getVector3fMap() = corrected.cast<float>();
   }
 }
@@ -285,9 +284,8 @@ const ContainerType Pipeline::currentLeaves() const
 {
   ContainerType leaves;
   for (MADtree * leaf : current_leaves_) {
-    pcl::PointXYZI point;
+    pcl::PointXYZ point;
     point.getVector3fMap() = leaf->mean_.cast<float>();
-    point.intensity        = leaf->mean_intensity_;
     leaves.push_back(point);
   }
   return leaves;
@@ -298,9 +296,8 @@ const ContainerType Pipeline::modelLeaves() const
   ContainerType leaves;
   for (const Frame * frame : keyframes_) {
     for (MADtree * leaf : frame->leaves_) {
-      pcl::PointXYZI point;
+      pcl::PointXYZ point;
       point.getVector3fMap() = leaf->mean_.cast<float>();
-      point.intensity        = leaf->mean_intensity_;
       leaves.push_back(point);
     }
   }

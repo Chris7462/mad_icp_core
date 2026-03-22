@@ -43,8 +43,8 @@ namespace mad_icp_core
 // forward declaration needed for LeafList
 class MADtree;
 
-// type aliases — Eigen::aligned_allocator matches pcl::PointCloud<pcl::PointXYZI>::points
-using ContainerType = std::vector<pcl::PointXYZI, Eigen::aligned_allocator<pcl::PointXYZI>>;
+// type aliases — Eigen::aligned_allocator matches pcl::PointCloud<pcl::PointXYZ>::points
+using ContainerType = std::vector<pcl::PointXYZ, Eigen::aligned_allocator<pcl::PointXYZ>>;
 using LeafList = std::vector<MADtree *>;
 
 class MADtree
@@ -90,7 +90,6 @@ public:
   Eigen::Vector3d mean_;
   Eigen::Vector3d bbox_;
   Eigen::Matrix3d eigenvectors_;
-  float mean_intensity_;
 };
 
 }  // namespace mad_icp_core
