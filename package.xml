@@ -5,7 +5,7 @@
   <version>1.0.0</version>
   <description>MAD-ICP Core C++ Library</description>
   <maintainer email="chris7462@gmail.com">chris7462</maintainer>
-  <license>BSD-3-Clause</license>
+  <license>Apache-2.0</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
 
