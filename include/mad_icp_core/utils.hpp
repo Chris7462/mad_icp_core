@@ -72,10 +72,26 @@ int computeMeanAndCovariance(
     cov += v * v.transpose();
     ++k;
   }
+
+  // Guard against degenerate ranges. With k == 0 there are no points to
+  // average (mean *= 1.0/k would be 0/0 -> NaN). With k == 1 the unbiased
+  // covariance normalization below divides by (k - 1) == 0 -> NaN/Inf,
+  // which would otherwise propagate into MADtree's eigen decomposition
+  // and poison eigenvectors_ for that node (and any node whose plane/normal
+  // fallback walk reaches it). Neither case can meaningfully define a
+  // sample covariance, so leave cov as zero (an isotropic/undefined shape)
+  // rather than producing non-finite values.
+  if (k == 0) {
+    return k;
+  }
   mean *= (1.0 / k);
-  cov *= (1.0 / k);
-  cov -= mean * mean.transpose();
-  cov *= double(k) / double(k - 1);
+  if (k > 1) {
+    cov *= (1.0 / k);
+    cov -= mean * mean.transpose();
+    cov *= double(k) / double(k - 1);
+  } else {
+    cov.setZero();
+  }
   return k;
 }
 

@@ -70,12 +70,16 @@ Pipeline::Pipeline(
 Pipeline::~Pipeline()
 {
   while (!frames_.empty()) {
-    delete frames_.front()->tree_;
+    Frame * f = frames_.front();
+    delete f->tree_;
     frames_.pop_front();
+    delete f;
   }
   while (!keyframes_.empty()) {
-    delete keyframes_.front()->tree_;
+    Frame * f = keyframes_.front();
+    delete f->tree_;
     keyframes_.pop_front();
+    delete f;
   }
 }
 
@@ -181,8 +185,6 @@ void Pipeline::compute(const double & curr_stamp, ContainerType curr_cloud_mem)
       icp_.update(frame->tree_);
     }
 
-#pragma omp barrier
-
     icp_.updateState();
   }
 
@@ -222,8 +224,11 @@ void Pipeline::compute(const double & curr_stamp, ContainerType curr_cloud_mem)
 
   frames_.push_back(current_frame);
   if (frames_.size() > FRAME_WINDOW) {
-    delete frames_.front()->tree_;
+    // Evict the oldest frame: free both its tree and the Frame object itself.
+    Frame * evicted = frames_.front();
+    delete evicted->tree_;
     frames_.pop_front();
+    delete evicted;
   }
 
   if (inliers_ratio < p_th_) {
@@ -239,16 +244,24 @@ void Pipeline::compute(const double & curr_stamp, ContainerType curr_cloud_mem)
     }
 
     while (!frames_.empty() && frames_.front()->frame_ <= new_seq) {
-      if (frames_.front()->frame_ < new_seq) {
-        delete frames_.front()->tree_;
-      }
+      Frame * f = frames_.front();
       frames_.pop_front();
+      if (f->frame_ < new_seq) {
+        // Not the promoted keyframe — free tree and Frame entirely.
+        delete f->tree_;
+        delete f;
+      }
+      // When f->frame_ == new_seq, f is best_frame itself, which is about
+      // to be handed over to keyframes_ below — do not delete it here.
     }
 
     keyframes_.push_back(best_frame);
     if (keyframes_.size() > static_cast<size_t>(num_keyframes_)) {
-      delete keyframes_.front()->tree_;
+      // Evict the oldest keyframe: free both its tree and the Frame object itself.
+      Frame * evicted = keyframes_.front();
+      delete evicted->tree_;
       keyframes_.pop_front();
+      delete evicted;
     }
 
     is_map_updated_  = true;

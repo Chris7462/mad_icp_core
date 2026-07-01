@@ -36,5 +36,9 @@ inline constexpr int SMOOTHING_T        = 10;
 inline constexpr double E_THRESHOLD_VEL = 0.3162;
 inline constexpr int MAX_ICP_ITS        = 15;
 inline constexpr int FRAME_WINDOW       = 10;
+// Levenberg-Marquardt-style damping added to H_adder_'s diagonal before
+// solving the ICP normal equations. Guards against a near-singular H
+// (e.g. long, feature-poor corridors) producing a garbage/NaN pose update.
+inline constexpr double ICP_DAMPING     = 1e-6;
 
 }  // namespace mad_icp_core

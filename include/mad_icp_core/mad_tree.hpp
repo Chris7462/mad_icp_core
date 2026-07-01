@@ -34,6 +34,7 @@
 
 #include <Eigen/Core>
 
+#include <atomic>
 #include <vector>
 
 namespace mad_icp_core
@@ -83,7 +84,7 @@ public:
   void getLeafs(std::back_insert_iterator<std::vector<MADtree *>> it);
 
   int num_points_;
-  bool matched_;
+  std::atomic<bool> matched_ = false;
   MADtree * left_ = nullptr;
   MADtree * right_ = nullptr;
   MADtree * parent_ = nullptr;

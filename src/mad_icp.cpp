@@ -27,6 +27,7 @@
 // POSSIBILITY OF SUCH DAMAGE.
 
 #include "mad_icp_core/mad_icp.hpp"
+#include "mad_icp_core/constants.hpp"
 
 #include <Eigen/Eigenvalues>
 
@@ -97,7 +98,14 @@ void MADicp::update(const MADtree * fixed_tree)
       continue;
     }
 
-    moving->matched_ = true;
+    // NOTE: multiple threads (each handling a different keyframe) can
+    // reach this line for the SAME `moving` leaf concurrently, since
+    // moving_leaves_ is shared across all keyframe iterations of the
+    // parallel loop in Pipeline::compute(). matched_ is std::atomic<bool>
+    // specifically so this concurrent write is well-defined; relaxed
+    // ordering is sufficient since every writer stores the same value
+    // (true) and no other memory operation needs to be ordered against it.
+    moving->matched_.store(true, std::memory_order_relaxed);
 
     JacobianMatrixType J;
     double e;
@@ -124,7 +132,20 @@ void MADicp::updateState()
     b_adder_ += b_adders_[i];
   }
 
-  Vector6d dx = H_adder_.ldlt().solve(-b_adder_);
+  // Damp the diagonal (Levenberg-Marquardt style) so a near-singular
+  // H_adder_ (e.g. long, feature-poor corridors with few constraints)
+  // doesn't produce an ill-conditioned solve.
+  Matrix6d H_damped = H_adder_ + ICP_DAMPING * Matrix6d::Identity();
+
+  Vector6d dx = H_damped.ldlt().solve(-b_adder_);
+
+  // Second line of defense: if the solve still produced a non-finite
+  // result (e.g. H_damped remained singular despite damping), skip this
+  // update rather than propagating NaN/Inf into X_.
+  if (!dx.allFinite()) {
+    return;
+  }
+
   Eigen::Isometry3d dX = Eigen::Isometry3d::Identity();
   dX.linear() = expMapSO3(dx.tail(3));
   dX.translation() = dx.head(3);
